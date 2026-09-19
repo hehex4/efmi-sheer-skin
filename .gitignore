@@ -1,0 +1,12 @@
+# Python and test caches
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local AI tool config never goes to the remote
+AGENTS.md
+CLAUDE.md
+
+# Windows shell leftovers
+Thumbs.db
+desktop.ini
