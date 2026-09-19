@@ -65,6 +65,39 @@ class RunbookContracts(unittest.TestCase):
         self.assertIn('--piece "body-source" "<身体资源>" "<身体draw>"', commands[0])
         self.assertIn("身体和丝袜的 draw 数量、起点、基顶点可以不同", text)
 
+    def p0_notice(self, text):
+        """Return the two verbatim lines of the P0 notice as they appear in a document."""
+        return [line.strip() for line in text.splitlines()
+                if line.strip().startswith(("【先确认能不能做】", "请先花半分钟看一眼"))]
+
+    def test_p0_gate_comes_first_in_skill(self):
+        # Low-capability agents answer after reading SKILL.md and step 00 only,
+        # so the notice text itself must live there, ahead of every other rule.
+        text = self.read("SKILL.md")
+        gate = text.index("## 前提闸门 P0")
+        self.assertLess(gate, text.index("## 默认值"))
+        self.assertLess(gate, text.index("## 硬规矩"))
+        self.assertEqual(len(self.p0_notice(text)), 2)
+        self.assertIn("【无法完成】", text)
+        self.assertIn("P0、U1、U2、三问没齐", text)
+
+    def test_p0_notice_opens_the_first_reply_example(self):
+        skill = self.read("SKILL.md")
+        step = self.read("references/step-00-intake.md")
+        example = step.split("## 期望输出", 1)[1].split("## 判定", 1)[0]
+        # The example must carry the same words as SKILL.md, before the file list.
+        self.assertEqual(self.p0_notice(example), self.p0_notice(skill))
+        self.assertLess(example.index("【先确认能不能做】"), example.index("还需要："))
+        operation = step.split("## 操作", 1)[1].split("## 期望输出", 1)[0]
+        self.assertLess(operation.index("【先确认能不能做】"), operation.index("点名尚缺的 U1"))
+
+    def test_missing_leg_evidence_stops_instead_of_falling_back(self):
+        for name in ("references/step-00-intake.md", "references/step-01-decide.md",
+                     "references/step-06-skin-source.md"):
+            verdict = self.read(name).split("## 判定", 1)[1].split("## ", 1)[0]
+            self.assertIn("【无法完成】", verdict, name)
+        self.assertIn("先确认能不能做", self.read("INSTALL.md"))
+
 
 if __name__ == "__main__":
     unittest.main()
