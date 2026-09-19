@@ -30,7 +30,7 @@ Agent Skill = 给 AI 编程助手看的逐步操作手册,外加它要用到的 
 - 只读取 Claude skills 的工具:`~/.claude/skills/efmi-sheer-skin/`
 - 支持 Agent Skills 公共目录的工具:`~/.agents/skills/efmi-sheer-skin/`
 
-**或者用 git:** 仓库根目录就是 skill 目录,直接克隆过去(文件夹名必须是 `efmi-sheer-skin`):
+**git:** 仓库根目录就是 skill 目录,直接克隆过去(文件夹名必须是 `efmi-sheer-skin`):
 
 ```bash
 git clone https://github.com/hehex4/efmi-sheer-skin.git ~/.claude/skills/efmi-sheer-skin
