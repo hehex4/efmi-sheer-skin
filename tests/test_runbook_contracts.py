@@ -119,9 +119,71 @@ class RunbookContracts(unittest.TestCase):
         example = step.split("## 期望输出", 1)[1].split("## 判定", 1)[0]
         # The example must carry the same words as SKILL.md, before the file list.
         self.assertEqual(self.p0_notice(example), self.p0_notice(skill))
-        self.assertLess(example.index("【开工提示】"), example.index("还需要："))
+        self.assertLess(example.index("【开工提示】"), example.index("【需要你提供】"))
         operation = step.split("## 操作", 1)[1].split("## 期望输出", 1)[0]
-        self.assertLess(operation.index("【开工提示】"), operation.index("点名尚缺的 U1"))
+        self.assertLess(operation.index("【开工提示】"), operation.index("【需要你提供】"))
+
+    def intake_ask(self, text):
+        """Return the verbatim lines of the four-item ask as they appear in a document."""
+        lines = [line.strip() for line in text.splitlines()]
+        start = next(i for i, line in enumerate(lines) if line == "【需要你提供】")
+        return lines[start:start + 5]
+
+    def test_intake_ask_is_verbatim_in_skill_and_step00(self):
+        # Weak models reply after reading SKILL.md only and then misquote the hunting steps
+        # (wrong hash length, wrong place to look), so the ask itself must live in SKILL.md.
+        skill = self.read("SKILL.md")
+        step = self.read("references/step-00-intake.md")
+        example = step.split("## 期望输出", 1)[1].split("## 判定", 1)[0]
+        ask = self.intake_ask(skill)
+        self.assertEqual([line[0] for line in ask[1:]], ["①", "②", "③", "④"])
+        self.assertEqual(self.intake_ask(example), ask)
+        self.assertLess(skill.index("【需要你提供】"), skill.index("## 默认值"))
+        # A mismatch is reported without taking sides or offering to switch.
+        self.assertIn("\n【hash 对不上】", skill)
+        self.assertIn("不说哪一个“正确”", skill)
+        for name in ("references/step-00-intake.md", "references/step-02-locate.md"):
+            verdict = self.read(name).split("## 判定", 1)[1].split("## ", 1)[0]
+            self.assertIn("【hash 对不上】", verdict, name)
+
+    def test_user_supplies_the_ps_hash_and_the_named_file(self):
+        # The hash comes from the user's hunting; the agent only cross-checks it against the frame.
+        # The file is asked for by name, never as "give me the ShaderCache folder".
+        self.assertIn("PS hash 由用户在 hunting 里找出来给，AI 不从帧里自己定", self.read("SKILL.md"))
+        step = self.read("references/step-00-intake.md")
+        example = step.split("## 期望输出", 1)[1].split("## 判定", 1)[0]
+        for needed in ("hash（16 位十六进制）", "hash-ps_regex.bin", "hash-ps.bin", "-ps.txt", "一帧转储"):
+            self.assertIn(needed, example)
+        self.assertNotIn("ShaderCache 目录", example)
+        self.assertNotIn("从帧定位", example)
+        verdict = step.split("## 判定", 1)[1].split("## ", 1)[0]
+        self.assertIn("不从帧里或目录里替他挑", verdict)
+        self.assertIn("不自己换", verdict)
+        locate = self.read("references/step-02-locate.md").split("## 操作", 1)[1].split("## 期望输出", 1)[0]
+        self.assertIn("必须等于用户给的 `<目标 PS hash>`", locate)
+
+    def test_q1_is_a_yes_no_signal_and_the_agent_lists_the_draws(self):
+        # Users never list every part that went black. Q1 only asks whether the shader is
+        # stockings-only; what it really draws comes from the frame's own draw list.
+        for name in ("SKILL.md", "references/step-00-intake.md", "references/step-02-locate.md"):
+            self.assertIn("只当“是 / 否”信号", self.read(name), name)
+        step = self.read("references/step-00-intake.md")
+        self.assertIn("不用列全", step)
+        self.assertIn("不把这份清单当成完整范围", step)
+        locate = self.read("references/step-02-locate.md").split("## 操作", 1)[1].split("## 期望输出", 1)[0]
+        commands = [line for line in locate.splitlines()
+                    if line.strip().startswith("python scripts/find_draw_shaders.py") and "--ps " in line]
+        self.assertEqual(len(commands), 1)
+        self.assertIn('--ps "<目标 PS hash>"', commands[0])
+
+    def test_q3_is_asked_only_for_attached_parts(self):
+        # The range is the stocking itself and is decided by the agent; the open question is gone.
+        step = self.read("references/step-00-intake.md")
+        self.assertNotIn("选定档里哪些区域要透", step)
+        self.assertIn("Q3（条件题，查到连带部件才发）", step)
+        self.assertIn("要不要一起透？默认不透。", step)
+        self.assertIn("范围告知（是告知，不是提问）", step)
+        self.assertIn("没触发视为已答", self.read("SKILL.md"))
 
     def test_missing_leg_evidence_is_reported_not_hidden(self):
         # Finding no leg under the stocking is told to the user once; it never silently

@@ -1,14 +1,14 @@
-# U2 怎么拿：抓帧与同次 ShaderCache 优先
+# U2 怎么拿：用户给 hash、点名文件、一帧转储
 
-[步 00](step-00-intake.md)索取 PS 时优先要“目标状态帧转储＋同次运行的 ShaderCache”。**新取证直接从下文方法 C 开始**，不要求先做方法 A。方法 C 放在最前；A/B 名称仅兼容旧引用，不代表执行顺序。
+[步 00](step-00-intake.md) 向用户要三件 U2：**丝袜材质 PS 的 hash**（用户在 hunting 里找，方法 A 第 1–4 步）、**点名的 PS 文件** `<hash>-ps_regex.bin`（方法 B）、**目标状态的一帧转储**（方法 C 的抓帧部分）。三件都是必须项；方法的字母只是名字，不代表顺序。建议的操作顺序：启动游戏前确认 `cache_shaders = 1` → 进游戏先抓帧 → 再 hunting 找 hash → 退出游戏取文件。
 
-帧目录可能只有 PS hash 或汇编，也可能有字节码，取决于配置；不能把“抓帧完成”等同于“已取得可修改的 PS”。先核验帧内文件是否为本次 draw 对应、RabbitFX 改写后的正确字节码；满足就直接复用，否则从同次 ShaderCache 取 `<hash>-ps_regex.bin`。不要求用户事先知道 hash，AI 从帧定位。
+**PS hash 由用户给，AI 不从帧里自己定。** 帧用来核对这个 hash、读 draw 与资源绑定；帧目录里可能只有 hash 或汇编，不能把“抓帧完成”等同于“已取得可修改的 PS”。核对不一致就停下问用户，不自己换。
 
-已有同版本、同状态有效资料优先复用，不强制重抓。方法 B 用于补齐缓存，方法 A 是无法抓帧或取证仍缺 PS 时的备用。默认只做主控；用户要队友才补对应帧并验证其 PS，不能默认共用。
+已有同版本、同状态的有效资料直接复用，只补缺的那一件。默认只做主控；用户要队友才补对应帧并验证其 PS，不能默认共用。
 
-## 方法 C：目标状态抓帧＋同次 ShaderCache（首选入口）
+## 方法 C：目标状态抓帧
 
-同一趟准备两类资料：帧转储用于定位 draw/PS、资源绑定及已转储的 cb；同次 ShaderCache 提供修改底子。二者不保证位于同一个文件夹。帧转储不能凭空还原没有绘制的身体源或未转储的常量。
+帧转储用于核对用户给的 PS、读 draw、资源绑定及已转储的 cb；修改底子来自方法 B 的文件。二者不保证位于同一个文件夹。帧转储不能凭空还原没有绘制的身体源或未转储的常量。
 
 ### 先说明为什么抓、抓什么
 
@@ -16,7 +16,7 @@ AI 先读已有 mod/贴图/证据，按缺项列出本次需要的帧；每一�
 
 | 取证目的 | 应抓的状态 | 需要的资料 |
 |---|---|---|
-| 定位丝袜材质 PS，确认目标 draw 与资源绑定 | 主控穿目标丝袜，正常绘制 | 帧 log＋同次 ShaderCache；帧内正确字节码可替代对应缓存。还需读材质参数时保留 cb |
+| 核对丝袜材质 PS，确认目标 draw 与资源绑定 | 主控穿目标丝袜，正常绘制 | 帧 log＋同次 ShaderCache；帧内正确字节码可替代对应缓存。还需读材质参数时保留 cb |
 | 从运行时取得裸腿肤色、身体资源及染色参数 | 同角色真实光腿状态，身体正常绘制；已有完整可信源时不补抓 | 光腿帧 log、实际 diffuse（dump_tex）、常量（dump_cb）；需建立/烘焙 UV 映射时还保留身体 vb/ib（dump_vb/dump_ib） |
 | 核对另一丝袜状态的不同 PS/绑定/染色 | 对应黑丝/白丝等状态，注明切换变量和值 | 对应帧 log、相关 PS；需要读取的贴图/cb/网格一并保留。共享且已核验的状态不重复抓 |
 | 核对队友 LOD | 用户明确要求时，目标角色作为队友正常显示 | 队友帧 log、对应 PS 与缺失资源，和主控分别记录 |
@@ -29,7 +29,7 @@ AI 先读已有 mod/贴图/证据，按缺项列出本次需要的帧；每一�
 
 1. `cache_shaders = 1`(出厂 0);
 2. `hunting` 不为 0；`analyse_options` 保留 `deferred_ctx_immediate`。先读 mod，预计需确认身体染色时同趟包含 `dump_cb`；需从帧提取身体几何/贴图时保留对应 buffers/textures。工作区已有全量配置不缩减，一帧可能几个 GB；只保留 log 无法补回被丢弃的资源。
-3. 查出实际抓帧键(`analyse_frame`)与清除 hunting 选择键(`done_hunting`)告诉用户，不照抄别人的按键。若已知目标 hash 在 ShaderFixes 有残留，先说明原因并经用户同意移到备份目录；hash 未知时不全目录清理，定位后只处理相关文件(见方法 A 的 ⚠)。启用 hunting 功能不等于让目标保持 skip；无需为了抓帧先逐个寻找 PS。
+3. 查出实际抓帧键(`analyse_frame`)与清除 hunting 选择键(`done_hunting`)告诉用户，不照抄别人的按键。若已知目标 hash 在 ShaderFixes 有残留，先说明原因并经用户同意移到备份目录；hash 未知时不全目录清理，定位后只处理相关文件(见方法 A 的 ⚠)。启用 hunting 功能不等于让目标保持 skip；先抓帧、再 hunting 找 hash，帧里就不会带着 skip。
 
 **用户**:
 
@@ -43,7 +43,7 @@ AI 先读已有 mod/贴图/证据，按缺项列出本次需要的帧；每一�
 
 **AI 收尾**:
 
-7. 提供 `FrameAnalysis-日期-时间` 与同次 ShaderCache 的目录路径；工作区要求归档时按其脚本立即归档，尚需 buffers/textures 时保留全量。AI 用 `scripts/find_draw_shaders.py` 查出材质 PS 的 hash：
+7. 提供 `FrameAnalysis-日期-时间` 目录路径；工作区要求归档时按其脚本立即归档，尚需 buffers/textures 时保留全量。AI 用 `scripts/find_draw_shaders.py` 核对用户给的 hash 是不是丝袜那次 draw 的材质 PS：
 
 ```
 python scripts/find_draw_shaders.py "<主控那帧>" --section "<ini 段名子串>" --cmds --slots --root "<3DMigoto 根>"
@@ -70,7 +70,7 @@ python scripts/find_draw_shaders.py "<主控那帧>" --ib "<TextureOverride 的 
 按 log 里那个 cb 槽那一行的 `first_constant` / `num_constants` 截:偏移 = `first_constant × 16` 字节,长度 = `num_constants × 16` 字节,
 每 16 字节 = 一个 `cbN[i]`(4 个 float)。方法来源:踩蘑菇社区《关于如何确定和修改材质中的常量参数》(caimogu.cc/post/2364332)。
 
-## 方法 A：hunting 标记导出（备用）
+## 方法 A：hunting 找 hash（必做）
 
 前提(`<3DMigoto 根>\d3dx.ini`):`hunting` 不为 0;`marking_mode = skip`;要从 ShaderFixes 拿文件时,`marking_actions` 里要带 `regex`。
 按键看 `d3dx.ini` 里 `toggle_hunting`、`previous_pixelshader`、`next_pixelshader`、`mark_pixelshader` 那几行。
@@ -85,7 +85,7 @@ python scripts/find_draw_shaders.py "<主控那帧>" --ib "<TextureOverride 的 
 4. 按标记键:hash 复制到剪贴板;`marking_actions` 带 `regex` 时,同时往 `ShaderFixes` 导出 `<hash>-ps.bin`(改写后的字节码)
    和 `<hash>-ps.txt`(汇编,文件头写着套用了哪些 `[ShaderRegex…]`)。2026-09 实测 `marking_actions = clipboard hlsl asm regex`
    一按标记,这两个文件同时出现;bin 反汇编和 txt 的指令条数一致。
-5. 交给 AI 的:`ShaderFixes\<hash>-ps.bin`,或者方法 B 的 `<hash>-ps_regex.bin`。
+5. 交给 AI 的:剪贴板里的 hash,加上方法 B 的 `<hash>-ps_regex.bin`;没有它才交 `ShaderFixes\<hash>-ps.bin`。
    ⚠ **别交同时导出的 `<hash>-ps.txt`** —— 那是汇编,当不了底子(注入在 HLSL 上做)。
    **被 ShaderRegex 改写过的 PS,标记时只出这个汇编、不出 HLSL**(补丁打在汇编层,3DMigoto 就是这么做的),
    所以只拿到 `-ps.txt` 时别反复按标记键,改走方法 B 取 `-ps_regex.bin`。
@@ -99,7 +99,7 @@ python scripts/find_draw_shaders.py "<主控那帧>" --ib "<TextureOverride 的 
 1. `d3dx.ini` 里 `cache_shaders = 1`(出厂 0),**游戏启动前**改好;EFMI 包 / 启动器更新会把 `d3dx.ini` 洗回出厂。
 2. 开游戏,让穿着丝袜的角色出现在画面里(着色器第一次被创建时才写缓存)。
 3. 退出游戏,取 `<ShaderCache>\<hash>-ps_regex.bin`,**修改时间必须是这次**(旧的 = 冻结了旧着色器)。
-4. hash 用方法 A 找,或者用方法 C 的帧转储查。ShaderFixes 里还留着这个 hash 的标记导出文件时,这里不会生成(见上面 ⚠)。
+4. hash 用方法 A 找;方法 C 的帧只用来核对,不用来替用户定 hash。ShaderFixes 里还留着这个 hash 的标记导出文件时,这里不会生成(见上面 ⚠)。
 5. 拿完把 `cache_shaders` 改回 0(调参期开着缓存,可能读到过期的着色器)。
 
 `<hash>-ps_regex.bin` 只有「`cache_shaders = 1` + 这次运行真用到了这个 PS + 它被 ShaderRegex 改写过」三条同时成立才会生成。
